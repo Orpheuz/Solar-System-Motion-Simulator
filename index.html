@@ -1,0 +1,169 @@
+<html>
+<head>
+	<link rel="stylesheet" type="text/css" href="css/solarSystem.css">
+	<script src="http://threejs.org/build/three.min.js"></script>
+	<script src="js/OrbitControls.js"></script>
+	<script type="text/javascript" src="js/SPE.min.js"></script>
+	<script src="js/stats.min.js"></script>
+	<script src="js/Detector.js"></script>
+	<script src="js/RingGeometryUV.js"></script>
+</head>
+<body>
+	<div id="info">WebGL space motion simulator <br> Planets are not scaled and orbits are speeded up and also not scaled for visualization purposes. <br>
+		DISCLAIMER: IT CAN BE PHYSICALLY AND ASTRONOMICALLY INCORRECT.
+	</div>
+	<div id="canvas" style="background:black"></div>
+
+	<script type="text/javascript">
+		if ( ! Detector.webgl ) { Detector.addGetWebGLMessage(); }
+		var planet = [], orbit_speed, orbit_ring, planet_radius, planet_beam_size, planet_beam_color, texture;
+		var scene, stats, renderer, camera, controls, clock, emitter = [], stars, particleGroup;
+
+		function init() {
+			//SCENE
+			scene = new THREE.Scene();
+
+			//RENDERER
+			renderer = new THREE.WebGLRenderer();
+			renderer.setSize(window.innerWidth, window.innerHeight);
+			document.getElementById('canvas').appendChild(renderer.domElement);
+
+			//CAMERA
+			camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 1, 10000);
+			camera.position.x = 550;
+			camera.position.y = 277;
+			camera.position.z = 1176;
+
+			//CLOCK
+			clock = new THREE.Clock();
+
+			//CONTROLS
+			controls = new THREE.OrbitControls(camera, renderer.domElement);
+			controls.enableDamping = true;
+			controls.dampingFactor = 0.25;
+
+			//STATS
+			stats = new Stats();
+			document.getElementById('canvas').appendChild(stats.domElement);
+			
+			//LISTENER
+			window.addEventListener('resize', onWindowResize, false);
+		}
+		
+		function onWindowResize() {
+
+			camera.aspect = window.innerWidth / window.innerHeight;
+			camera.updateProjectionMatrix();
+
+			renderer.setSize(window.innerWidth, window.innerHeight);
+
+		}
+
+		function initSolarSystem() {
+
+			var mat, geo;
+			orbit_speed = [1, 0.0078, 0.0059, 0.005, 0.004, 0.0022, 0.0016, 0.0011, 0.0009];
+			orbit_ring = [1, 100, 140, 180, 220, 300, 400, 490, 560];
+			planet_radius = [60, 10, 13, 15, 14, 34, 29, 22, 23];
+			planet_beam_size = [200, 100, 100, 100, 100, 100, 100, 100, 100];
+			planet_beam_color = [new THREE.Color(1, 1, 0), new THREE.Color(0.117, 0.564, 1), new THREE.Color(0.117, 0.564, 1), new THREE.Color(0.117, 0.564, 1), new THREE.Color(0.117, 0.564, 1), new THREE.Color(0.117, 0.564, 1), new THREE.Color(0.117, 0.564, 1), new THREE.Color(0.117, 0.564, 1), new THREE.Color(0.117, 0.564, 1)];
+
+			texture = ["textures/sun.jpg", "textures/mercury.jpg", "textures/venus.jpg", "textures/earth.jpg", "textures/mars.jpg", "textures/jupiter.jpg", "textures/saturn.jpg", "textures/uranus.jpg", "textures/neptune.jpg", "textures/pluto.jpg"];
+
+			stars = new THREE.Mesh(
+				new THREE.SphereGeometry(2500, 64, 64), 
+				new THREE.MeshBasicMaterial({
+					map:  THREE.ImageUtils.loadTexture('textures/stars.png'), 
+					side: THREE.BackSide
+				})
+			);
+			scene.add(stars);
+
+			particleGroup = new SPE.Group({
+				texture: {
+					value: THREE.ImageUtils.loadTexture('textures/smokeparticle.png')
+				}
+			});
+
+			for(var i = 0; i < 9; i++) {
+
+				geo = new THREE.SphereGeometry(planet_radius[i], 20, 20);
+				mat = new THREE.MeshBasicMaterial({map: THREE.ImageUtils.loadTexture(texture[i])});
+				planet[i] = new THREE.Mesh(geo, mat);
+				scene.add(planet[i]);
+
+				planet[i].position.set(orbit_ring[i], 0, 0);
+				emitter[i] = new SPE.Emitter({
+					maxAge: 2,
+					position: {
+						value: new THREE.Vector3(
+							Math.sin(Date.now() * orbit_speed[i] ) * orbit_ring [i],
+							Math.cos(Date.now() * orbit_speed[i] ) * orbit_ring [i],
+							planet[i].position.z)
+					},
+
+					acceleration: {
+						value: new THREE.Vector3(0, 0, 300),
+						spread: new THREE.Vector3(0.1, 0.1, 0.1)
+					},
+
+					velocity: {
+						value: new THREE.Vector3(0, 0, 300)
+					},
+
+					color: {
+						value: [planet_beam_color[i], new THREE.Color() ],
+						spread: new THREE.Vector3(0, 0, 0.6),
+					},
+					size: {
+						value: [planet_beam_size[i], 10]
+					},
+					opacity: {
+						value: 0.1
+					},
+
+					particleCount: 3000
+				});
+
+				particleGroup.addEmitter(emitter[i]);
+			}
+
+			geo = new THREE.RingGeometryUV(35, planet_radius[6] + 25, 60, 5, 0, Math.PI * 2);
+			mat = new THREE.MeshBasicMaterial({ 
+				map: THREE.ImageUtils.loadTexture('textures/saturnRings.png'), 
+				side: THREE.DoubleSide, 
+				transparent: true, 
+				opacity: 0.6 });
+			var saturnRing = new THREE.Mesh(geo, mat);
+			var saturn = new THREE.Object3D();
+			planet[6].add(saturnRing);
+			saturnRing.rotation.x = -Math.PI * 55/180;
+
+			camera.lookAt(planet[0].position);
+			scene.add(particleGroup.mesh);
+		}
+
+		function draw() {
+
+			requestAnimationFrame(draw);
+
+			for(var i = 1; i < 9; i++) {
+				planet[i].rotation.y = Date.now() * 0.0006;
+				planet[i].position.x = Math.sin(Date.now() * orbit_speed[i] ) * orbit_ring [i];
+				planet[i].position.y = Math.cos(Date.now() * orbit_speed[i] ) * orbit_ring [i];
+				planet[i].position.z = Math.cos(Date.now() * orbit_speed[i] ) * orbit_ring [i];
+				emitter[i].position.value = emitter[i].position.value.set(planet[i].position.x, planet[i].position.y, planet[i].position.z);
+			}
+			particleGroup.tick(clock.getDelta());
+			renderer.render(scene, camera);	
+			stats.update();
+		}
+
+		init();
+		initSolarSystem();
+		draw();
+
+	</script>
+
+</body>
+</html>
